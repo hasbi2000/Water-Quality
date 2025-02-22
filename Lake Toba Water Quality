@@ -1,0 +1,354 @@
+Import var Sentinel = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED"),
+import LSTMODIS = ee.ImageCollection("MODIS/061/MOD11A1"),
+Import geometry = polygon
+Import geometry2 = Featurecollection (7 element)
+
+Map.centerObject(geometry, 12);
+
+function Oksigen_Terlarut (image) {
+  var bands = image.select('B.*').multiply(0.0001)
+  var NDWI = bands.normalizedDifference(['B3', 'B8']).rename('NDWI')
+  var scale = NDWI.gt(0.09)
+  var NIR = bands.select('B8')
+  var Red = bands.select('B4')
+  var Green = bands.select('B3')
+  var DO = (NIR.subtract(Red)).multiply((NIR.divide(Green)).multiply(80)).add(8.3)
+  return DO.updateMask(scale)
+  .copyProperties(image, ['system:time_start', 'system:time_end'])
+}
+
+function VPHENOL (image) {
+  var bands = image.select('B.*').multiply(0.0001)
+  var NDWI = bands.normalizedDifference(['B3', 'B8']).rename('NDWI')
+  var scale = NDWI.gt(0.09)
+  var NIR = bands.select('B8')
+  var Red = bands.select('B4')
+  var Blue = bands.select('B2')
+  var V_PHENOL = Red.add(NIR).add(Blue.divide(NIR)).multiply(0.004257);
+  return V_PHENOL.updateMask(scale)
+  .copyProperties(image, ['system:time_start', 'system:time_end'])
+}
+
+function NH4_ (image) {
+  var bands = image.select('B.*').multiply(0.0001)
+  var NDWI = bands.normalizedDifference(['B3', 'B8']).rename('NDWI')
+  var scale = NDWI.gt(0.09)
+  var NIR = bands.select('B8')
+  var Red = bands.select('B4')
+  var Blue = bands.select('B2')
+  var NH4 = Red.add(NIR)
+  .add(Blue.divide(NIR).multiply(Blue.add(NIR)))
+  .add(Blue.divide(NIR))
+  .multiply(0.8)
+  .multiply(0.099);
+  return NH4.updateMask(scale)
+  .copyProperties(image, ['system:time_start', 'system:time_end'])
+}
+
+function NH3_N (image) {
+  var bands = image.select('B.*').multiply(0.0001)
+  var NDWI = bands.normalizedDifference(['B3', 'B8']).rename('NDWI')
+  var scale = NDWI.gt(0.09)
+  var NIR = bands.select('B8')
+  var Red = bands.select('B4')
+  var Blue = bands.select('B2')
+  var Green = bands.select('B3')
+  var NH3 = (Red.add(NIR))
+  .add((Blue).divide(NIR).exp().multiply(0.029))
+  .add((Green.divide((Blue.add(Green).divide(NIR)))
+  .multiply(Green).exp()).multiply(0.5));
+  return NH3.updateMask(scale)
+  .copyProperties(image, ['system:time_start', 'system:time_end'])
+}
+
+var X11 = ee.ImageCollection("MODIS/061/MOD11A1")
+.filterDate("2021-01-01","2022-12-31")
+.select('LST_Day_1km')
+
+var LST = X11.map(function(img){
+  return img
+   .multiply(0.02)
+   .subtract(273.15)
+   .clip(geometry)
+   .copyProperties(img, ['system:time_start'])
+})
+  
+var Oksigen_T = Sentinel
+//.filterDate('2021-01-26', '2022-12-31')
+.filterBounds(geometry)
+.filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 30))
+.map(Oksigen_Terlarut)
+
+var VP = Sentinel
+//.filterDate('2021-01-26', '2022-12-31')
+.filterBounds(geometry)
+.filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 30))
+.map(VPHENOL)
+
+var NH41 = Sentinel
+//.filterDate('2021-01-26', '2022-12-31')
+.filterBounds(geometry)
+.filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 30))
+.map(NH4_)
+
+var NH3N = Sentinel
+//.filterDate('2021-01-26', '2022-12-31')
+.filterBounds(geometry)
+.filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 30))
+.map(NH3_N)
+
+var medianLST = LST.mean()
+var medianDO = Oksigen_T.median()
+var medianVP = VP.median()
+var medianNH4 = NH41.median()
+var medianNH3 = NH3N.median()
+
+var DO2019_JAN_JUN = Oksigen_T.filterDate('2019-01-01', '2019-06-30').median()
+var DO2019_JUL_DES = Oksigen_T.filterDate('2019-07-01', '2019-12-31').median()
+var DO2020_JAN_JUN = Oksigen_T.filterDate('2020-01-01', '2020-06-30').median()
+var DO2020_JUL_DES = Oksigen_T.filterDate('2020-07-01', '2020-12-31').median()
+var DO2021_JAN_JUN  = Oksigen_T.filterDate('2021-01-01', '2021-06-30').median()
+var DO2021_JUL_DES = Oksigen_T.filterDate('2021-07-01', '2021-12-31').median()
+var DO2022_JAN_JUN = Oksigen_T.filterDate('2022-01-01', '2022-06-30').median()
+var DO2022_JUL_DES = Oksigen_T.filterDate('2022-07-01', '2022-12-31').median()
+
+var VP2019_JAN_JUN = VP.filterDate('2019-01-01', '2019-06-30').median()
+var VP2019_JUL_DES = VP.filterDate('2019-07-01', '2019-12-31').median()
+var VP2020_JAN_JUN = VP.filterDate('2020-01-01', '2020-06-30').median()
+var VP2020_JUL_DES = VP.filterDate('2020-07-01', '2020-12-31').median()
+var VP2021_JAN_JUN = VP.filterDate('2021-01-01', '2021-06-30').median()
+var VP2021_JUL_DES = VP.filterDate('2021-07-01', '2021-12-31').median()
+var VP2022_JAN_JUN = VP.filterDate('2022-01-01', '2022-06-30').median()
+var VP2022_JUL_DES = VP.filterDate('2022-07-01', '2022-12-31').median()
+
+var N4H12019_JAN_JUN = NH41.filterDate('2019-01-01', '2019-06-30').median()
+var N4H12019_JUL_DES = NH41.filterDate('2019-07-01', '2019-12-31').median()
+var N4H12020_JAN_JUN = NH41.filterDate('2020-01-01', '2020-06-30').median()
+var N4H12020_JUL_DES = NH41.filterDate('2020-07-01', '2020-12-31').median()
+var N4H12021_JAN_JUN = NH41.filterDate('2021-01-01', '2021-06-30').median()
+var N4H12021_JUL_DES = NH41.filterDate('2021-07-01', '2021-12-31').median()
+var N4H12022_JAN_JUN = NH41.filterDate('2022-01-01', '2022-06-30').median()
+var N4H12022_JUL_DES = NH41.filterDate('2022-07-01', '2022-12-31').median()
+
+var NO32019_JAN_JUN = NH3N.filterDate('2019-01-01', '2019-06-30').median()
+var NO32019_JUL_DES = NH3N.filterDate('2019-07-01', '2019-12-31').median()
+var NO32020_JAN_JUN = NH3N.filterDate('2020-01-01', '2020-06-30').median()
+var NO32020_JUL_DES = NH3N.filterDate('2020-07-01', '2020-12-31').median()
+var NO32021_JAN_JUN = NH3N.filterDate('2021-01-01', '2021-06-30').median()
+var NO32021_JUL_DES = NH3N.filterDate('2021-07-01', '2021-12-31').median()
+var NO32022_JAN_JUN = NH3N.filterDate('2022-01-01', '2022-06-30').median()
+var NO32022_JUL_DES = NH3N.filterDate('2022-07-01', '2022-12-31').median()
+
+//Map.addLayer(medianLST.clip(geometry), [], 'Suhu', false)
+//Map.addLayer(medianDO.clip(geometry), [], 'DO', false)
+//Map.addLayer(medianVP.clip(geometry), [], 'V-PHENOL', false)
+//Map.addLayer(medianNH4.clip(geometry), [], 'NH4-N', false)
+//Map.addLayer(medianNH3.clip(geometry), [], 'NO3-N', false)
+
+//Map.addLayer(medianLST.clip(geometry), [], 'Suhu', false)
+//Map.addLayer(DO2019_JAN_JUN.clip(geometry), [], 'DO', false)
+//Map.addLayer(VP2019.clip(geometry), [], 'V-PHENOL', false)
+//Map.addLayer(NH412019.clip(geometry), [], 'NH4-N', false)
+Map.addLayer(NO32020_JUL_DES.clip(geometry), [], 'NO3-N', false)
+
+var gabugan = medianLST.addBands(medianDO)
+  .rename(['LST_1', 'Doxygen']);
+
+var sample = ee.FeatureCollection.randomPoints({
+  region: geometry,
+  points: 1000
+});
+
+var Sample = ee.FeatureCollection.randomPoints({
+  region: geometry,
+  points: 200
+});
+var imgSamp = gabugan.sampleRegions({
+  collection: sample,
+  scale: 10
+});
+
+var imgsand = gabugan.clip(sample);
+
+var k23 = imgsand.select(['LST_1', 'Doxygen'])
+  .reduceRegion({
+    reducer: ee.Reducer.linearRegression(1, 1), 
+    geometry: sample.geometry(),  
+    scale: 10,                   
+    maxPixels: 1e8                
+  });
+
+print(k23);
+
+var II = medianLST.multiply(0.35)
+var DOxLST = medianDO.add(10).subtract(II)
+Map.addLayer(DOxLST, [], 'DOxLST', false)
+Map.addLayer(II, [], 'samp', false)
+//ff0000,f5ff00,00ff4b
+//00ff28,f5ff00,ff0000
+print(LST)
+
+
+var xPropVals = ['2019 Januari - Juni', '2019 Juli - Desember', 
+'2020 Januari - Juni', '2020 Juli - Desember', '2021 Januari - Juni', '2021 Juli - Desember', '2022 Januari - Juni', '2022 Juli - Desember'];  // Year labels
+var xPropLabels = ['2019 Januari - Juni', '2019 Juli - Desember', 
+'2020 Januari - Juni', '2020 Juli - Desember', '2021 Januari - Juni', '2021 Juli - Desember', '2022 Januari - Juni', '2022 Juli - Desember'];  // Labels for all bands (16 in total)
+
+var DO = DO2019_JAN_JUN.addBands(DO2019_JUL_DES).addBands(DO2020_JAN_JUN).addBands(DO2020_JUL_DES)
+.addBands(DO2021_JAN_JUN).addBands(DO2021_JUL_DES).addBands(DO2022_JAN_JUN).addBands(DO2022_JUL_DES)
+
+var VPHN = VP2019_JAN_JUN.addBands(VP2019_JUL_DES).addBands(VP2020_JAN_JUN).addBands(VP2020_JUL_DES)
+.addBands(VP2021_JAN_JUN).addBands(VP2021_JUL_DES).addBands(VP2022_JAN_JUN).addBands(VP2022_JUL_DES)
+
+var NH4_N1 = N4H12019_JAN_JUN.addBands(N4H12019_JUL_DES).addBands(N4H12020_JAN_JUN).addBands(N4H12020_JUL_DES)
+.addBands(N4H12021_JAN_JUN).addBands(N4H12021_JUL_DES).addBands(N4H12022_JAN_JUN).addBands(N4H12022_JUL_DES)
+
+var NO3N = NO32019_JAN_JUN.addBands(NO32019_JUL_DES).addBands(NO32020_JAN_JUN).addBands(NO32020_JUL_DES)
+.addBands(NO32021_JAN_JUN).addBands(NO32021_JUL_DES).addBands(NO32022_JAN_JUN).addBands(NO32022_JUL_DES)
+
+var data1 = DO.clip(Sample)
+var Data = DO.addBands(VP);
+var chart = ui.Chart.image
+                .regions({
+                  image: DO,
+                  regions: geometry2,
+                  reducer: ee.Reducer.median(),
+                  scale: 30,
+                  seriesProperty: 'LineChart',
+                  xLabels: xPropVals
+                })
+                .setSeriesNames(['Site 1', 'Site 2', 'Site 3', 'Site 4',
+                'Site 5', 'Site 6', 'Site 7'])
+                .setChartType('LineChart')
+                .setOptions({
+                  title: 'Average Dysolved Oxygen by Year',
+                  hAxis: {
+                    title: 'year',
+                    titleTextStyle: {italic: false, bold: true},
+                    ticks: xPropLabels
+                  },
+                  vAxis: {
+                    title: 'value (mg/L)',
+                    titleTextStyle: {italic: false, bold: true}
+                  },
+                   series: {
+                    0: {color: 'red', lineWidth: 3, pointSize: 4, label: 'Series 1'},
+                    1: {color: 'blue', lineWidth: 3, pointSize: 4, label: 'Series 2'},
+                    2: {color: 'green', lineWidth: 3, pointSize: 4, label: 'Series 3'},
+                    3: {color: 'purple', lineWidth: 3, pointSize: 4, label: 'Series 4'},
+                    4: {color: 'yellow', lineWidth: 3, pointSize: 4, label: 'Series 5'},
+                    5: {color: 'cyan', lineWidth: 3, pointSize: 4, label: 'Series 6'},
+                    6: {color: 'magenta', lineWidth: 3, pointSize: 4, label: 'Series 7'}
+                  }
+                });
+                print(chart)
+var chartVP = ui.Chart.image
+                .regions({
+                  image: VPHN,
+                  regions: geometry2,
+                  reducer: ee.Reducer.median(),
+                  scale: 30,
+                  seriesProperty: 'LineChart',
+                  xLabels: xPropVals
+                })
+                .setSeriesNames(['Site 1', 'Site 2', 'Site 3', 'Site 4',
+                'Site 5', 'Site 6', 'Site 7'])
+                .setChartType('LineChart')
+                .setOptions({
+                  title: 'Average VPHNOL-N by Year',
+                  hAxis: {
+                    title: 'year',
+                    titleTextStyle: {italic: false, bold: true},
+                    ticks: xPropLabels
+                  },
+                  vAxis: {
+                    title: 'value (mg/L)',
+                    titleTextStyle: {italic: false, bold: true}
+                  },
+                   series: {
+                    0: {color: 'red', lineWidth: 3, pointSize: 4, label: 'Series 1'},
+                    1: {color: 'blue', lineWidth: 3, pointSize: 4, label: 'Series 2'},
+                    2: {color: 'green', lineWidth: 3, pointSize: 4, label: 'Series 3'},
+                    3: {color: 'purple', lineWidth: 3, pointSize: 4, label: 'Series 4'},
+                    4: {color: 'yellow', lineWidth: 3, pointSize: 4, label: 'Series 5'},
+                    5: {color: 'cyan', lineWidth: 3, pointSize: 4, label: 'Series 6'},
+                    6: {color: 'magenta', lineWidth: 3, pointSize: 4, label: 'Series 7'}
+                  }
+                });
+                print(chartVP)
+  var chartNH4_N = ui.Chart.image
+                .regions({
+                  image: NH4_N1,
+                  regions: geometry2,
+                  reducer: ee.Reducer.median(),
+                  scale: 30,
+                  seriesProperty: 'LineChart',
+                  xLabels: xPropVals
+                })
+                .setSeriesNames(['Site 1', 'Site 2', 'Site 3', 'Site 4',
+                'Site 5', 'Site 6', 'Site 7'])
+                .setChartType('LineChart')
+                .setOptions({
+                  title: 'Average NH4-N by Year',
+                  hAxis: {
+                    title: 'year',
+                    titleTextStyle: {italic: false, bold: true},
+                    ticks: xPropLabels
+                  },
+                  vAxis: {
+                    title: 'value (mg/L)',
+                    titleTextStyle: {italic: false, bold: true}
+                  },
+                   series: {
+                    0: {color: 'red', lineWidth: 3, pointSize: 4, label: 'Series 1'},
+                    1: {color: 'blue', lineWidth: 3, pointSize: 4, label: 'Series 2'},
+                    2: {color: 'green', lineWidth: 3, pointSize: 4, label: 'Series 3'},
+                    3: {color: 'purple', lineWidth: 3, pointSize: 4, label: 'Series 4'},
+                    4: {color: 'yellow', lineWidth: 3, pointSize: 4, label: 'Series 5'},
+                    5: {color: 'cyan', lineWidth: 3, pointSize: 4, label: 'Series 6'},
+                    6: {color: 'magenta', lineWidth: 3, pointSize: 4, label: 'Series 7'}
+                  }
+                });
+                print(chartNH4_N)
+  var chartNO3N = ui.Chart.image
+                .regions({
+                  image: NO3N,
+                  regions: geometry2,
+                  reducer: ee.Reducer.median(),
+                  scale: 30,
+                  seriesProperty: 'LineChart',
+                  xLabels: xPropVals
+                })
+                .setSeriesNames(['Site 1', 'Site 2', 'Site 3', 'Site 4',
+                'Site 5', 'Site 6', 'Site 7'])
+                .setChartType('LineChart')
+                .setOptions({
+                  title: 'Average NO3-N by Year',
+                  hAxis: {
+                    title: 'year',
+                    titleTextStyle: {italic: false, bold: true},
+                    ticks: xPropLabels
+                  },
+                  vAxis: {
+                    title: 'value (mg/L)',
+                    titleTextStyle: {italic: false, bold: true}
+                  },
+                   series: {
+                    0: {color: 'red', lineWidth: 3, pointSize: 4, label: 'Series 1'},
+                    1: {color: 'blue', lineWidth: 3, pointSize: 4, label: 'Series 2'},
+                    2: {color: 'green', lineWidth: 3, pointSize: 4, label: 'Series 3'},
+                    3: {color: 'purple', lineWidth: 3, pointSize: 4, label: 'Series 4'},
+                    4: {color: 'yellow', lineWidth: 3, pointSize: 4, label: 'Series 5'},
+                    5: {color: 'cyan', lineWidth: 3, pointSize: 4, label: 'Series 6'},
+                    6: {color: 'magenta', lineWidth: 3, pointSize: 4, label: 'Series 7'}
+                  }
+                });
+                print(chartNO3N)
+  print(Data)
+  print(Sample)
+  Map.addLayer(Sample,[],'Sample')
+  
+var Sample12 = ee.FeatureCollection.randomPoints({
+  region: Danau_Toba,
+  points: 200
+});
